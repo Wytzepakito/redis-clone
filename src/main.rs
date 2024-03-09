@@ -2,10 +2,30 @@ use std::io::{self, prelude::*};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
+const MAX_SIZE:usize = 1024;
+
+fn parse_redis_command(&received_buffer: &[u8; MAX_SIZE]) {
+
+    let first_byte: Option<&u8>  = received_buffer.get(1);
+
+    if let Some(first_byte) {
+        match(*first_byte) {
+
+        }
+    } else {
+        println!("We are erroring");
+    }
+
+}
+
+fn parse_array(&buffer: &[u8; MAX_SIZE]) {
+
+
+}
 
 fn handle_client(mut stream: TcpStream, num: usize)  {
 
-     let mut buffer = [0; 1024]; // Buffer to store received data
+     let mut buffer = [0; MAX_SIZE]; // Buffer to store received data
 
     loop {
         // Read data from the TcpStream
