@@ -1,10 +1,9 @@
 use std::io::{self, prelude::*};
 use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 
-const MESSAGE_SIZE: usize = 5;
-
-fn handle_client(mut stream: TcpStream)  {
+fn handle_client(mut stream: TcpStream, num: usize)  {
 
      let mut buffer = [0; 1024]; // Buffer to store received data
 
@@ -20,7 +19,7 @@ fn handle_client(mut stream: TcpStream)  {
                 // Process the received data (you can replace this with your own logic)
                 let received_data = &buffer[..bytes_read];
                 let string_data = String::from_utf8(received_data.to_vec()).unwrap();
-                println!("Received: {:?}", &string_data);
+                println!("Received: {:?} on thread {}", &string_data, num);
 
                 // Write back to the TcpStream
                 stream.write_all(b"+PONG\r\n").unwrap();
@@ -38,8 +37,12 @@ fn main() -> std::io::Result<()> {
     println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
-    for stream in listener.incoming() {
-        handle_client(stream?);
+    for (i, stream) in listener.incoming().enumerate() {
+
+        thread::spawn(move || {
+
+            handle_client(stream.unwrap(), i);
+        });
     }
 
 
