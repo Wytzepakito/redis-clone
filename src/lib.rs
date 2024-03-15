@@ -9,6 +9,8 @@ pub fn make_response(words: Vec<String>) -> Vec<u8> {
 
     if words.first().expect("No first word in words") == "echo" {
         make_bulk_response(words.get(1).expect("No second word in words"))
+    } else if words.first().expect("No first word in words") == "ping" {
+        make_ping_response()
     } else {
         unimplemented!();
     }
@@ -26,6 +28,15 @@ fn make_bulk_response(word: &String) -> Vec<u8> {
     response.push(b'\n');
     response
 }
+fn make_ping_response() -> Vec<u8> {
+    let mut response = Vec::new();
+    response.push(b'+');
+    response.extend("PONG".as_bytes());
+    response.push(b'\r');
+    response.push(b'\n');
+    response
+}
+
 pub fn parse_redis_command(&received_buffer: &[u8; MAX_SIZE]) -> Vec<String> {
     let first_byte: &u8 = received_buffer.get(0).expect("Couldn't get first byte");
 
