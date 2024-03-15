@@ -51,7 +51,6 @@ fn parse_array(&buffer: &[u8; MAX_SIZE]) -> Vec<String> {
 
     let mut length_word: usize;
     let mut i = 2;
-    println!("Number of words: {}", number_of_words);
     while (number_of_words as usize != words.len()) {
         while (i != buffer.len()) {
             let dollar = buffer.get(i).expect("Couldn't parse u8");

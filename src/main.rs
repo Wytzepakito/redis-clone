@@ -21,11 +21,9 @@ fn handle_client(mut stream: TcpStream, num: usize) {
                 // Process the received data (you can replace this with your own logic)
                 let received_data = &buffer[..bytes_read];
                 let string_data = String::from_utf8(received_data.to_vec()).unwrap();
-                println!("Received: {:?} on thread {}", &string_data, num);
                 let mut words = parse_redis_command(&buffer);
                 let response = make_response(words);
                 // Write back to the TcpStream
-                println!("Writing back: {:?}", String::from_utf8(response.clone()).unwrap());
                 stream.write_all(&response.into_boxed_slice()).unwrap();
             }
             Err(err) => {
