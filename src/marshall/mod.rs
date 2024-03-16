@@ -42,7 +42,7 @@ impl Marshaller {
             "ping" => Ok(Command::PING),
             "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
             "set" => match array.len() {
-                2 => Ok(Command::SET(
+                3 => Ok(Command::SET(
                     array[1].get_string()?.to_string(),
                     array[2].get_string()?.to_string(),
                 )),
