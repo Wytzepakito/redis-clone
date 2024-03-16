@@ -82,7 +82,19 @@ impl RedisDataStore {
 
     pub fn get(&self, key: &str) -> Option<SavedItem> {
         let mut map = self.shared_map.lock().unwrap();
-        let result = map.get(key);
-        result.cloned()
+        let mut is_expired = false;
+        if let Some(item) = map.get(key) {
+            if let Some(expiration) = &item.expiration {
+                if expiration.set_time + expiration.delta < Local::now() {
+                    is_expired = true;
+                }
+            }
+        }
+        if (is_expired){
+            map.remove(key);
+            None
+        } else {
+            map.get(key).cloned()
+        }   
     }
 }

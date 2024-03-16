@@ -33,7 +33,7 @@ fn main() -> std::io::Result<()> {
         let store = RedisDataStore::new(hashmap.clone());
         let mut redis = Redis::new(store);
         thread::spawn(move || {
-            handle_expirations(&mut redis);
+            //handle_expirations(&mut redis);
             handle_stream(stream.unwrap(), redis);
         });
     }
