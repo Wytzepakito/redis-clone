@@ -2,7 +2,7 @@ pub mod marshall;
 pub mod responder;
 pub mod store;
 
-use std::net::TcpStream;
+use std::{net::TcpStream, sync::{Arc, Mutex}};
 
 use marshall::Marshaller;
 use responder::{Command, Responder};
@@ -18,9 +18,9 @@ pub struct Redis {
 }
 
 impl Redis {
-    pub fn new() -> Self {
+    pub fn new(store: RedisDataStore) -> Self {
         Self {
-            store: RedisDataStore::new(),
+            store: store,
             marshaller: Marshaller {},
             responder: Responder {},
         }
@@ -42,15 +42,18 @@ impl Redis {
             Command::SET(key, val) => {
                 let result = self.store.set(key.to_string(), val.to_string());
                 match result {
-                    Some(_) => Ok(format!("+OK\r\n")),
-                    None => Err(String::from("Set call wasn't succesful")),
+                    Some(_) => {
+                        println!("key was already present in store");
+                        Ok(format!("+OK\r\n"))
+                    },
+                    None => Ok(format!("+OK\r\n"))
                 }
             }
             Command::GET(key) => {
                 let result = self.store.get(key);
                 match result {
                     Some(val) => Ok(format!("${}\r\n{}\r\n", val.len(), val)),
-                    None => Err(String::from("Get call wasn't succesful")),
+                    None => Ok(format!("$-1\r\n")),
                 }
             }
         }

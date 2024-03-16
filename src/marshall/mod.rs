@@ -38,6 +38,8 @@ impl Marshaller {
         match command {
             "ping" => Ok(Command::PING),
             "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
+            "set" => Ok(Command::SET(array[1].get_string()?.to_string(), array[2].get_string()?.to_string())),
+            "get" => Ok(Command::GET(array[1].get_string()?.to_string())),
             _ => Err(String::from("Unknown command")),
         }
     }

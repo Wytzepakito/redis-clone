@@ -1,13 +1,15 @@
+use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
+use redis_starter_rust::store::RedisDataStore;
 use redis_starter_rust::Redis;
 
-fn handle_stream(mut stream: TcpStream) {
+fn handle_stream(mut stream: TcpStream, mut redis: Redis) {
     loop {
         // Process the received data (you can replace this with your own logic)
-        let mut redis = Redis::new();
         let response: Result<String, String> = redis.process_stream(&mut stream);
 
         // Write back to the TcpStream
@@ -22,9 +24,13 @@ fn main() -> std::io::Result<()> {
     println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+    let hashmap = Arc::new(Mutex::new(HashMap::new()));
     for stream in listener.incoming() {
+
+        let store = RedisDataStore::new(hashmap.clone());
+        let mut redis = Redis::new(store);
         thread::spawn(move || {
-            handle_stream(stream.unwrap());
+            handle_stream(stream.unwrap(), redis);
         });
     }
 

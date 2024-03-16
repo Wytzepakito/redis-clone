@@ -1,24 +1,27 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 pub struct RedisDataStore {
-    map: HashMap<String, String>,
+    shared_map: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl RedisDataStore {
-    pub fn new() -> Self {
+    pub fn new(hashmap: Arc<Mutex<HashMap<String, String>>>) -> Self {
         Self {
-            map: HashMap::new(),
+            shared_map: hashmap,
         }
     }
 
     pub fn set(&mut self, key: String, val: String) -> Option<String> {
-        let stuff = self.map.insert(key, val);
+        println!("Inserting {} into {}", val, key);
+        let mut map = self.shared_map.lock().unwrap();
+        let stuff = map.insert(key, val);
 
-        println!("{:?}", stuff.as_ref().unwrap());
         stuff
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
-        self.map.get(key).cloned()
+        let mut map = self.shared_map.lock().unwrap();
+        let result = map.get(key);
+        result.cloned()
     }
 }
