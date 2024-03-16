@@ -2,7 +2,7 @@ pub mod marshall;
 pub mod responder;
 pub mod store;
 
-use std::{net::TcpStream, sync::{Arc, Mutex}};
+use std::net::TcpStream;
 
 use marshall::Marshaller;
 use responder::{Command, Responder};
@@ -39,20 +39,18 @@ impl Redis {
         match command {
             Command::PING => Ok(format!("+PONG\r\n")),
             Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
-            Command::SET(key, val) => {
-                let result = self.store.set(key.to_string(), val.to_string());
-                match result {
-                    Some(_) => {
-                        println!("key was already present in store");
-                        Ok(format!("+OK\r\n"))
-                    },
-                    None => Ok(format!("+OK\r\n"))
-                }
+            Command::SET(key, val)  => {
+                self.store.set(key.to_string(), val.to_string()).map(|_| println!("Key was already present in store"));
+                Ok(format!("+OK\r\n"))
+            }
+            Command::SET_EXP(key, val, delta ) => {
+                self.store.set_exp(key.to_string(), val.to_string(), delta.clone()).map(|_| println!("Key was already present in store"));
+                Ok(format!("+OK\r\n"))
             }
             Command::GET(key) => {
                 let result = self.store.get(key);
                 match result {
-                    Some(val) => Ok(format!("${}\r\n{}\r\n", val.len(), val)),
+                    Some(saved) => Ok(format!("${}\r\n{}\r\n", saved.value.len(), saved.value)),
                     None => Ok(format!("$-1\r\n")),
                 }
             }

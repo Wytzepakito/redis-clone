@@ -1,3 +1,5 @@
+use chrono::{Duration, TimeDelta};
+use core::time;
 use std::{
     io::{BufRead, BufReader},
     net::TcpStream,
@@ -7,6 +9,7 @@ use crate::responder::Command;
 
 pub struct Marshaller {}
 
+#[derive(Debug)]
 pub enum MessageSegment {
     Array(Vec<MessageSegment>),
     SimpleString(String),
@@ -38,10 +41,29 @@ impl Marshaller {
         match command {
             "ping" => Ok(Command::PING),
             "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
-            "set" => Ok(Command::SET(array[1].get_string()?.to_string(), array[2].get_string()?.to_string())),
+            "set" => match array.len() {
+                2 => Ok(Command::SET(
+                    array[1].get_string()?.to_string(),
+                    array[2].get_string()?.to_string(),
+                )),
+                5 => Ok(Command::SET_EXP(
+                    array[1].get_string()?.to_string(),
+                    array[2].get_string()?.to_string(),
+                    self.parse_time(array[4].get_string()?.to_string())?,
+                )),
+                _ => unreachable!(),
+            },
             "get" => Ok(Command::GET(array[1].get_string()?.to_string())),
             _ => Err(String::from("Unknown command")),
         }
+    }
+
+    fn parse_time(&self, time_string: String) -> Result<TimeDelta, String> {
+        let milliseconds = time_string
+            .parse::<i64>()
+            .map_err(|_| String::from("Couldn't parse time_string"))?;
+        TimeDelta::try_milliseconds(milliseconds)
+            .ok_or(String::from("Could't parse miliseconds into TimeDelta"))
     }
 
     pub fn parse_redis_command(

@@ -19,6 +19,10 @@ fn handle_stream(mut stream: TcpStream, mut redis: Redis) {
     }
 }
 
+fn handle_expirations(redis: &mut Redis) {
+    redis.store.handle_expirations();
+}
+
 fn main() -> std::io::Result<()> {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
@@ -26,10 +30,10 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
     let hashmap = Arc::new(Mutex::new(HashMap::new()));
     for stream in listener.incoming() {
-
         let store = RedisDataStore::new(hashmap.clone());
         let mut redis = Redis::new(store);
         thread::spawn(move || {
+            handle_expirations(&mut redis);
             handle_stream(stream.unwrap(), redis);
         });
     }
