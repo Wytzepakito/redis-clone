@@ -31,6 +31,7 @@ impl Redis {
         let array = words.get_array()?;
         let command = array[0].get_string()?;
 
+        
         match command {
             "ping" => Ok(Command::PING),
             "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
