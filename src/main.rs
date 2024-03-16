@@ -2,35 +2,19 @@ use std::io::{self, prelude::*};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
-use redis_starter_rust::{make_response, parse_redis_command, MAX_SIZE};
+use redis_starter_rust::Redis;
 
-
-
-fn handle_client(mut stream: TcpStream, num: usize) {
-    let mut buffer = [0; MAX_SIZE]; // Buffer to store received data
-
+fn handle_stream(mut stream: TcpStream, num: usize) {
     loop {
-        // Read data from the TcpStream
-        match stream.read(&mut buffer) {
-            Ok(bytes_read) => {
-                if bytes_read == 0 {
-                    // Connection closed
-                    break;
-                }
+        // Process the received data (you can replace this with your own logic)
+        let mut redis = Redis::new();
+        let mut words = redis.marshaller.parse_redis_command(&mut stream);
+        let command = redis.make_response(words.expect("Couldn't get words"));
 
-                // Process the received data (you can replace this with your own logic)
-                let received_data = &buffer[..bytes_read];
-                let string_data = String::from_utf8(received_data.to_vec()).unwrap();
-                let mut words = parse_redis_command(&buffer);
-                let response = make_response(words);
-                // Write back to the TcpStream
-                stream.write_all(&response.into_boxed_slice()).unwrap();
-            }
-            Err(err) => {
-                eprintln!("Error reading from TcpStream: {}", err);
-                break;
-            }
-        }
+        let response = redis.responder.make_response(command.expect("Couldn't get command"));
+
+        // Write back to the TcpStream
+        stream.write_all(response.expect("Couldn't get response").as_bytes()).unwrap();
     }
 }
 
@@ -41,7 +25,7 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
     for (i, stream) in listener.incoming().enumerate() {
         thread::spawn(move || {
-            handle_client(stream.unwrap(), i);
+            handle_stream(stream.unwrap(), i);
         });
     }
 
