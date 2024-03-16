@@ -3,6 +3,8 @@ use std::{
     net::TcpStream,
 };
 
+use crate::responder::Command;
+
 pub struct Marshaller {}
 
 pub enum MessageSegment {
@@ -20,7 +22,7 @@ impl MessageSegment {
     }
 
     pub fn get_string(&self) -> Result<&str, String> {
-        match (self) {
+        match self {
             MessageSegment::SimpleString(v) => Ok(v),
             MessageSegment::BulkString(v) => Ok(v),
             _ => Err(String::from("Not a string")),
@@ -29,6 +31,17 @@ impl MessageSegment {
 }
 
 impl Marshaller {
+    pub fn make_command(&mut self, words: MessageSegment) -> Result<Command, String> {
+        let array = words.get_array()?;
+        let command = array[0].get_string()?;
+
+        match command {
+            "ping" => Ok(Command::PING),
+            "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
+            _ => Err(String::from("Unknown command")),
+        }
+    }
+
     pub fn parse_redis_command(
         &self,
         stream: &mut std::net::TcpStream,
@@ -37,7 +50,8 @@ impl Marshaller {
 
         self.parse_segment(&mut reader)
     }
-    pub fn parse_segment(
+
+    fn parse_segment(
         &self,
         reader: &mut BufReader<&mut TcpStream>,
     ) -> Result<MessageSegment, String> {
@@ -51,8 +65,8 @@ impl Marshaller {
 
         match segment_type {
             "*" => self.parse_array(data, reader),
-            "$" => self.parse_bulk_string(data, reader),
-            "+" => self.parse_simple_string(data, reader),
+            "$" => self.parse_bulk_string(reader),
+            "+" => self.parse_simple_string(data),
             _ => unimplemented!(),
         }
     }
@@ -78,9 +92,8 @@ impl Marshaller {
         Ok(MessageSegment::Array(words))
     }
 
-    pub fn parse_bulk_string(
+    fn parse_bulk_string(
         &self,
-        data: &str,
         reader: &mut BufReader<&mut TcpStream>,
     ) -> Result<MessageSegment, String> {
         let mut segment = String::new();
@@ -92,11 +105,7 @@ impl Marshaller {
         ))
     }
 
-    pub fn parse_simple_string(
-        &self,
-        data: &str,
-        reader: &mut BufReader<&mut TcpStream>,
-    ) -> Result<MessageSegment, String> {
+    fn parse_simple_string(&self, data: &str) -> Result<MessageSegment, String> {
         Ok(MessageSegment::SimpleString(data.to_string()))
     }
 }

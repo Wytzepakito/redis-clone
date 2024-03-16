@@ -2,8 +2,9 @@ pub mod marshall;
 pub mod responder;
 pub mod store;
 
+use std::net::TcpStream;
 
-use marshall::{Marshaller, MessageSegment};
+use marshall::Marshaller;
 use responder::{Command, Responder};
 use store::RedisDataStore;
 
@@ -16,8 +17,6 @@ pub struct Redis {
     pub responder: Responder,
 }
 
-
-
 impl Redis {
     pub fn new() -> Self {
         Self {
@@ -27,21 +26,35 @@ impl Redis {
         }
     }
 
-    pub fn make_response(&mut self, words: MessageSegment) -> Result<Command, String> {
-        let array = words.get_array()?;
-        let command = array[0].get_string()?;
+    pub fn process_stream(&mut self, stream: &mut TcpStream) -> Result<String, String> {
+        let words = self.marshaller.parse_redis_command(stream);
+        let optional_command = self
+            .marshaller
+            .make_command(words.expect("Couldn't get words"));
+        let command = optional_command.expect("Couldn't get command");
+        self.process_command(&command)
+    }
 
-        
+    pub fn process_command(&mut self, command: &Command) -> Result<String, String> {
         match command {
-            "ping" => Ok(Command::PING),
-            "echo" => Ok(Command::ECHO(array[1].get_string()?.to_string())),
-            _ => Err(String::from("Unknown command")),
+            Command::PING => Ok(format!("+PONG\r\n")),
+            Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
+            Command::SET(key, val) => {
+                let result = self.store.set(key.to_string(), val.to_string());
+                match result {
+                    Some(_) => Ok(format!("+OK\r\n")),
+                    None => Err(String::from("Set call wasn't succesful")),
+                }
+            }
+            Command::GET(key) => {
+                let result = self.store.get(key);
+                match result {
+                    Some(val) => Ok(format!("${}\r\n{}\r\n", val.len(), val)),
+                    None => Err(String::from("Get call wasn't succesful")),
+                }
+            }
         }
     }
 }
 
 impl Redis {}
-
-impl RedisDataStore {
-    fn save(&mut self, words: Vec<String>) {}
-}

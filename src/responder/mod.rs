@@ -1,20 +1,25 @@
-use crate::DECIMAL_RADIX;
+use core::fmt;
+use std::fmt::Display;
 
 pub struct Responder {}
 
-
+#[derive(Debug)]
 pub enum Command {
     PING,
     ECHO(String),
+    SET(String, String),
+    GET(String),
 }
 
-impl Responder {
-    pub fn make_response(&self, command: Command) -> Result<String, String> {
-        match(command) {
-            Command::PING => Ok(format!("+PONG\r\n")),
-            Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
-            _ => Err(String::from("Unknown command")),
+impl Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Command::PING => write!(f, "PING"),
+            Command::ECHO(msg) => write!(f, "ECHO({})", msg),
+            Command::SET(key, val) => write!(f, "SET({}, {})", key, val),
+            Command::GET(key) => write!(f, "GET({})", key),
         }
-
     }
 }
+
+impl Responder {}
