@@ -48,22 +48,13 @@ impl RedisDataStore {
 
     pub fn handle_expirations(&mut self) {
         let mut map = self.shared_map.lock().unwrap();
-        map.retain(|_, value| {
-            match &value.expiration {
-                Some(expiration) => {
-                    expiration.set_time + expiration.delta > Local::now()
-                },
-                None => true
-            } 
+        map.retain(|_, value| match &value.expiration {
+            Some(expiration) => expiration.set_time + expiration.delta > Local::now(),
+            None => true,
         })
     }
 
-    pub fn set_exp(
-        &mut self,
-        key: String,
-        val: String,
-        delta: TimeDelta,
-    ) -> Option<SavedItem> {
+    pub fn set_exp(&mut self, key: String, val: String, delta: TimeDelta) -> Option<SavedItem> {
         let mut map = self.shared_map.lock().unwrap();
         let expiry_keeper = ExpiryKeeper::new(Local::now(), delta);
         let saved_item = SavedItem::new(val, Some(expiry_keeper));
@@ -90,11 +81,11 @@ impl RedisDataStore {
                 }
             }
         }
-        if (is_expired){
+        if (is_expired) {
             map.remove(key);
             None
         } else {
             map.get(key).cloned()
-        }   
+        }
     }
 }

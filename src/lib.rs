@@ -1,9 +1,11 @@
+pub mod config;
 pub mod marshall;
 pub mod responder;
 pub mod store;
 
 use std::net::TcpStream;
 
+use config::Config;
 use marshall::Marshaller;
 use responder::{Command, Responder};
 use store::RedisDataStore;
@@ -15,14 +17,16 @@ pub struct Redis {
     pub store: RedisDataStore,
     pub marshaller: Marshaller,
     pub responder: Responder,
+    pub config: Config,
 }
 
 impl Redis {
-    pub fn new(store: RedisDataStore) -> Self {
+    pub fn new(store: RedisDataStore, config: Config) -> Self {
         Self {
             store: store,
             marshaller: Marshaller {},
             responder: Responder {},
+            config: config,
         }
     }
 
@@ -39,12 +43,16 @@ impl Redis {
         match command {
             Command::PING => Ok(format!("+PONG\r\n")),
             Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
-            Command::SET(key, val)  => {
-                self.store.set(key.to_string(), val.to_string()).map(|_| println!("Key was already present in store"));
+            Command::SET(key, val) => {
+                self.store
+                    .set(key.to_string(), val.to_string())
+                    .map(|_| println!("Key was already present in store"));
                 Ok(format!("+OK\r\n"))
             }
-            Command::SET_EXP(key, val, delta ) => {
-                self.store.set_exp(key.to_string(), val.to_string(), delta.clone()).map(|_| println!("Key was already present in store"));
+            Command::SET_EXP(key, val, delta) => {
+                self.store
+                    .set_exp(key.to_string(), val.to_string(), delta.clone())
+                    .map(|_| println!("Key was already present in store"));
                 Ok(format!("+OK\r\n"))
             }
             Command::GET(key) => {
@@ -54,6 +62,8 @@ impl Redis {
                     None => Ok(format!("$-1\r\n")),
                 }
             }
+            Command::INFO(info_command) => Ok(self.responder.info_response(&self.config)),
+            _ => unimplemented!(),
         }
     }
 }
