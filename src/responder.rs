@@ -47,8 +47,13 @@ impl Display for InfoCommand {
 }
 
 impl Responder {
+    pub fn new() -> Responder {
+        Responder {}
+    }
+    pub fn ping_request(&self) -> String {
+        self.make_array_str(vec![String::from("$4\r\nping\r\n")])
+    }
     pub fn info_response(&self, config: &Config) -> String {
-
         let array_string = match &config.role {
             Role::MASTER(masterConfig) => masterConfig.config_string(),
             Role::SLAVE(_) => String::from("$10\r\nrole:slave\r\n"),
@@ -57,7 +62,7 @@ impl Responder {
         array_string
     }
 
-    fn make_array_str(&self,vec: Vec<String>) -> String {
+    fn make_array_str(&self, vec: Vec<String>) -> String {
         let mut str = format!("*{}\r\n", vec.len());
         vec.iter().for_each(|s| str.push_str(s));
         str

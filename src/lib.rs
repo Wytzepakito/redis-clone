@@ -1,70 +1,94 @@
+
 pub mod config;
+pub mod connection;
 pub mod marshall;
 pub mod responder;
 pub mod store;
-
-use std::net::TcpStream;
+use std::{
+    collections::HashMap,
+    io::Write,
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use config::Config;
-use marshall::Marshaller;
-use responder::{Command, Responder};
-use store::RedisDataStore;
 
-pub const MAX_SIZE: usize = 30;
-pub const DECIMAL_RADIX: u32 = 10;
+use crate::config::{get_config, Role};
 
-pub struct Redis {
-    pub store: RedisDataStore,
-    pub marshaller: Marshaller,
-    pub responder: Responder,
-    pub config: Config,
+use crate::responder::Responder; 
+use crate::connection::Connection;
+use crate::store::RedisDataStore;
+
+
+pub struct RedisServer {
 }
 
-impl Redis {
-    pub fn new(store: RedisDataStore, config: Config) -> Self {
-        Self {
-            store: store,
-            marshaller: Marshaller {},
-            responder: Responder {},
-            config: config,
+impl RedisServer {
+    pub fn new() -> RedisServer {
+        RedisServer {}
+    }
+
+    fn slave_handshake(&self, mut master_stream: TcpStream) {
+        let mut responder = Responder::new();
+        master_stream
+            .write_all(responder.ping_request().as_bytes())
+            .unwrap();
+        println!("Send ping");
+    }
+
+    fn spawn_slave(&mut self, config: Config) {
+
+
+        let listener = TcpListener::bind(format!("127.0.0.1:{:0>4}", &config.port)).unwrap();
+        let master_stream = TcpStream::connect(format!(
+            "127.0.0.1:{:0>4}",
+            &config
+                .role
+                .get_slave_config()
+                .expect("Slave config should be there")
+                .replicated_port
+        ))
+        .unwrap();
+        let hashmap = Arc::new(Mutex::new(HashMap::new()));
+
+
+        self.slave_handshake(master_stream);
+
+        while let (Ok((stream, _))) = listener.accept() {
+
+            let store = RedisDataStore::new(hashmap.clone());
+            let mut redis = Connection::new(store, config.clone());
+            thread::spawn(move || {
+                //handle_expirations(&mut redis);
+                redis.handle_stream(stream);
+            });
         }
     }
 
-    pub fn process_stream(&mut self, stream: &mut TcpStream) -> Result<String, String> {
-        let words = self.marshaller.parse_redis_command(stream);
-        let optional_command = self
-            .marshaller
-            .make_command(words.expect("Couldn't get words"));
-        let command = optional_command.expect("Couldn't get command");
-        self.process_command(&command)
+    fn spawn_master(&mut self, config: Config) {
+        let listener = TcpListener::bind(format!("127.0.0.1:{:0>4}", config.port)).unwrap();
+        let hashmap = Arc::new(Mutex::new(HashMap::new()));
+
+        while let (Ok((stream, _))) = listener.accept() {
+
+            let store = RedisDataStore::new(hashmap.clone());
+            let mut redis = Connection::new(store, config.clone());
+            thread::spawn(move || {
+                //handle_expirations(&mut redis);
+                redis.handle_stream(stream);
+            });
+        }
     }
 
-    pub fn process_command(&mut self, command: &Command) -> Result<String, String> {
-        match command {
-            Command::PING => Ok(format!("+PONG\r\n")),
-            Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
-            Command::SET(key, val) => {
-                self.store
-                    .set(key.to_string(), val.to_string())
-                    .map(|_| println!("Key was already present in store"));
-                Ok(format!("+OK\r\n"))
-            }
-            Command::SET_EXP(key, val, delta) => {
-                self.store
-                    .set_exp(key.to_string(), val.to_string(), delta.clone())
-                    .map(|_| println!("Key was already present in store"));
-                Ok(format!("+OK\r\n"))
-            }
-            Command::GET(key) => {
-                let result = self.store.get(key);
-                match result {
-                    Some(saved) => Ok(format!("${}\r\n{}\r\n", saved.value.len(), saved.value)),
-                    None => Ok(format!("$-1\r\n")),
-                }
-            }
-            Command::INFO(info_command) => Ok(self.responder.info_response(&self.config)),
-            _ => unimplemented!(),
+
+    pub fn run(&mut self) {
+
+        let config = get_config();
+
+        match config.role {
+            Role::MASTER(_) => self.spawn_master(config),
+            Role::SLAVE(_) => self.spawn_slave(config),
         }
     }
 }
-
