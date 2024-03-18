@@ -1,48 +1,79 @@
+
+
 use clap::{arg, command, value_parser, Arg};
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub role: Role,
     pub port: u32,
-    pub replica_of: Option<ReplicaOf>
 }
 
 #[derive(Debug, Clone)]
-pub struct ReplicaOf {
-    pub host: String,
-    pub port: u32,
+pub struct SlaveConfig {
+    pub replicated_host: String,
+    pub replicated_port: u32,
 }
 
-
-impl ReplicaOf {
-    pub fn new(vec: Vec<&str>) -> ReplicaOf {
-        ReplicaOf {
-            host: vec.get(0).expect("Couldn't get first arg of replicaof").to_string(),
-            port: vec.get(1).expect("Couldn't get second arg of replicaof").parse::<u32>().expect("Couldn't parse second arg of replicaof"),
+impl SlaveConfig {
+    pub fn new(vec: Vec<&str>) -> SlaveConfig {
+        SlaveConfig {
+            replicated_host: vec.get(0).expect("Couldn't get first arg of replicaof").to_string(),
+            replicated_port: vec.get(1).expect("Couldn't get second arg of replicaof").parse::<u32>().expect("Couldn't parse second arg of replicaof"),
         }
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub struct MasterConfig {
+    pub replication_id: String,
+    pub offset: u32,
+}
+
+
+impl MasterConfig {
+    pub fn new() -> MasterConfig {
+        MasterConfig {
+            replication_id: String::from("8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"),
+            offset: 0,
+        }
+    }
+
+    pub fn config_string(&self) -> String {
+        let strings = vec![self.role_string(), self.replication_id_out(), self.replication_offset_out()];
+        format!("${}\r\n{}\r\n", strings.join("\n").len(), strings.join("\n"))
+    }
+
+    pub fn role_string(&self) -> String {
+        "role:master".to_owned()
+    }
+    pub fn replication_id_out(&self) -> String {
+        format!("master_replid:{}", self.replication_id)
+    }
+    
+    pub fn replication_offset_out(&self) -> String {
+        format!("master_repl_offset:{}", self.offset)
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub enum Role {
-    MASTER,
-    SLAVE,
+    MASTER(MasterConfig),
+    SLAVE(SlaveConfig),
 }
 
 impl Config {
     pub fn new(role: Role) -> Config {
-        Config { role: role, replica_of: None, port:6379 }
+        Config { role: role, port:6379 }
     }
 
     pub fn from_args(args: InputArgs) -> Config {
         Config {
             role: match args.replica_of {
-                Some(_)=> Role::SLAVE,
-                None => Role::MASTER
+                Some(args)=> Role::SLAVE(SlaveConfig::new(args)),
+                None => Role::MASTER(MasterConfig::new()),
             },
-            replica_of: args.replica_of.map( |v | 
-                ReplicaOf::new(v)
-            ),
             port: args.port
 
         }

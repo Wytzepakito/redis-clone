@@ -48,13 +48,18 @@ impl Display for InfoCommand {
 
 impl Responder {
     pub fn info_response(&self, config: &Config) -> String {
-        let mut info_string = String::new();
-        //info_string.push_str("# replication");
-        match config.role {
-            Role::MASTER => info_string.push_str("$11\r\nrole:master\r\n"),
-            Role::SLAVE => info_string.push_str("$10\r\nrole:slave\r\n"),
-        }
 
-        info_string
+        let array_string = match &config.role {
+            Role::MASTER(masterConfig) => masterConfig.config_string(),
+            Role::SLAVE(_) => String::from("$10\r\nrole:slave\r\n"),
+        };
+        println!("{}", array_string);
+        array_string
+    }
+
+    fn make_array_str(&self,vec: Vec<String>) -> String {
+        let mut str = format!("*{}\r\n", vec.len());
+        vec.iter().for_each(|s| str.push_str(s));
+        str
     }
 }
