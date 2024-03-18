@@ -68,4 +68,3 @@ impl Redis {
     }
 }
 
-impl Redis {}
