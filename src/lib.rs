@@ -12,7 +12,7 @@ use std::{
     thread,
 };
 
-use config::Config;
+use config::{Config, SlaveConfig};
 
 use crate::config::{get_config, Role};
 
@@ -29,31 +29,40 @@ impl RedisServer {
         RedisServer {}
     }
 
-    fn slave_handshake(&self, mut master_stream: TcpStream) {
+    fn slave_handshake(&self, mut master_stream: TcpStream, replicated_port: &u32) {
         let mut responder = Responder::new();
         master_stream
             .write_all(responder.ping_request().as_bytes())
             .unwrap();
         println!("Send ping");
+        
+        master_stream
+            .write_all(responder.replconf_request_one(replicated_port).as_bytes())
+            .unwrap();
+        master_stream
+            .write_all(responder.replconf_request_two().as_bytes())
+            .unwrap();
     }
 
     fn spawn_slave(&mut self, config: Config) {
 
 
         let listener = TcpListener::bind(format!("127.0.0.1:{:0>4}", &config.port)).unwrap();
-        let master_stream = TcpStream::connect(format!(
-            "127.0.0.1:{:0>4}",
+        let replicated_port = 
             &config
                 .role
                 .get_slave_config()
                 .expect("Slave config should be there")
-                .replicated_port
+                .replicated_port;
+        let master_stream = TcpStream::connect(format!(
+            "127.0.0.1:{:0>4}",
+            replicated_port
         ))
         .unwrap();
         let hashmap = Arc::new(Mutex::new(HashMap::new()));
 
 
-        self.slave_handshake(master_stream);
+        self.slave_handshake(master_stream, &config.port);
 
         while let (Ok((stream, _))) = listener.accept() {
 
