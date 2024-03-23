@@ -73,7 +73,6 @@ impl RedisServer {
         let mut responder = Responder::new();
         println!("Send ping");
         self.send_and_ack(master_stream, responder.ping_request(), Command::PONG)?;
-
         
         println!("Send replconf 1");
         self.send_and_ack(master_stream, responder.replconf_request_one(replicated_port), Command::OK)?;
