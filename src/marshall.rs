@@ -46,11 +46,16 @@ impl Marshaller {
     }
 
     fn match_string(&mut self, words: MessageSegment) -> Result<Command, String> {
+        // We could maybe in the future use a RegexSet for this but for now we'll use an ugly if/else block
         println!("{:?}", words.get_string()?);
-        match words.get_string()? {
-            "pong" => Ok(Command::PONG),
-            "ok" => Ok(Command::OK),
-            _ => Err(String::from("Unknown command")),
+        if words.get_string()?.starts_with("pong") {
+            Ok(Command::PONG)
+        } else if words.get_string()?.starts_with("ok") {
+            Ok(Command::OK)
+        } else if words.get_string()?.starts_with("fullresync") {
+            Ok(Command::FULLRESYNC)
+        } else  {
+            Err(String::from("Unknown command"))
         }
     }
 
@@ -65,6 +70,7 @@ impl Marshaller {
             "get" => Ok(Command::GET(array[1].get_string()?.to_string())),
             "info" => self.match_info(array),
             "replconf" => Ok(Command::REPLCONF),
+            "psync" => Ok(Command::PSYNC),
             _ => Err(String::from("Unknown command")),
         }
     }

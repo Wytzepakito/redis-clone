@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    config::Config, formatter::make_info_response, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
+    config::Config, formatter::{make_fullresync_str, make_info_str, make_simple_str}, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
 };
 
 pub struct Connection {
@@ -42,6 +42,7 @@ impl Connection {
             Command::PING => Ok(format!("+PONG\r\n")),
             Command::PONG => Ok(String::from("")),
             Command::OK => Ok(String::from("")),
+            Command::FULLRESYNC => Ok(String::from("")),
             Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
             Command::SET(key, val) => {
                 self.store
@@ -62,8 +63,9 @@ impl Connection {
                     None => Ok(format!("$-1\r\n")),
                 }
             }
-            Command::INFO(info_command) => Ok(make_info_response(&self.config)),
+            Command::INFO(info_command) => Ok(make_info_str(&self.config)),
             Command::REPLCONF => Ok(format!("+OK\r\n")),
+            Command::PSYNC => Ok(make_fullresync_str(&self.config)),
         }
     }
 

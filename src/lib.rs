@@ -81,8 +81,11 @@ impl RedisServer {
 
         println!("Send replconf 2");
         self.send_and_ack(master_stream, responder.replconf_request_two(), Command::OK)?;
-        println!("{}", responder.replconf_request_two());
+        println!("{}", responder.replconf_request_two()); 
 
+        println!("Send psync");
+        self.send_and_ack(master_stream, responder.psync_request(), Command::FULLRESYNC)?;
+        println!("{}", responder.psync_request()); 
         Ok(())
     }
 
@@ -94,9 +97,11 @@ impl RedisServer {
         let words = marshall.parse_redis_command(master_stream);
         println!("{:?}",words);
         let optional_command = marshall.make_command(words?);
-        match optional_command? {
-            expected_response => Ok(()),
-            _ => Err(format!("Received unexpected command on {}", request))
+
+        if optional_command? == expected_response {
+            Ok(())
+        } else {
+            Err(format!("Received unexpected command on {}", request))
         }
     }
 

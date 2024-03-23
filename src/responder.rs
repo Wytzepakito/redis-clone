@@ -6,11 +6,11 @@ use std::{
 
 use chrono::TimeDelta;
 
-use crate::{config::{Config, Role}, formatter::{make_array_str, make_bulk_str, make_info_response, make_simple_str}};
+use crate::{config::{Config, Role}, formatter::{make_array_str, make_bulk_str, make_info_str, make_simple_str}};
 
 pub struct Responder {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Command {
     PING,
     PONG,
@@ -21,6 +21,8 @@ pub enum Command {
     SET_EXP(String, String, TimeDelta),
     GET(String),
     REPLCONF,
+    PSYNC,
+    FULLRESYNC,
 }
 
 pub enum Response { 
@@ -34,7 +36,7 @@ impl Response {
         match self {
             Response::PONG => make_array_str(vec![make_bulk_str(String::from("pong"))]),
             Response::OK => make_simple_str("OK"),
-            Response::INFO(config) => make_info_response(&config)
+            Response::INFO(config) => make_info_str(&config)
         }
     }
 }
@@ -51,11 +53,13 @@ impl Display for Command {
             Command::GET(key) => write!(f, "GET({})", key),
             Command::INFO(info_command) => write!(f, "INFO({})", info_command),
             Command::REPLCONF => write!(f, "REPLCONF"),
+            Command::PSYNC => write!(f, "PSYNC"),
+            Command::FULLRESYNC => write!(f, "FULLRESYNC"),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum InfoCommand {
     REPLICATION,
 }
@@ -87,4 +91,8 @@ impl Responder {
         make_array_str(veccie.iter().map(|s| make_bulk_str(s.to_string())).collect())
     }
 
+    pub fn psync_request(&self) ->  String {
+        let mut veccie = vec![String::from("PSYNC"), String::from("?"), String::from("-1")];    
+        make_array_str(veccie.iter().map(|s| make_bulk_str(s.to_string())).collect())
+    }
 }
