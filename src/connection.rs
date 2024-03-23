@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    config::Config, formatter::{make_fullresync_str, make_info_str, make_simple_str}, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
+    config::Config, formatter::{make_bulk_str, make_fullresync_str, make_info_str, make_simple_str}, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
 };
 
 pub struct Connection {
@@ -27,7 +27,7 @@ impl Connection {
         }
     }
 
-    pub fn process_stream(&mut self, stream: &mut TcpStream) -> Result<String, String> {
+    pub fn process_stream(&mut self, stream: &mut TcpStream) -> Result<Vec<u8>, String> {
         let words = self.marshaller.parse_redis_command(stream);
         println!("words received: {:?}", words);
         let optional_command = self
@@ -37,34 +37,34 @@ impl Connection {
         self.process_command(&command)
     }
 
-    pub fn process_command(&mut self, command: &Command) -> Result<String, String> {
+    pub fn process_command(&mut self, command: &Command) -> Result<Vec<u8>, String> {
         match command {
-            Command::PING => Ok(format!("+PONG\r\n")),
-            Command::PONG => Ok(String::from("")),
-            Command::OK => Ok(String::from("")),
-            Command::FULLRESYNC => Ok(String::from("")),
-            Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
+            Command::PING => Ok(self.responder.pong_response()),
+            Command::PONG => Ok(self.responder.empty_response()),
+            Command::OK => Ok(self.responder.empty_response()),
+            Command::FULLRESYNC => Ok(self.responder.empty_response()),
+            Command::ECHO(msg) => Ok(make_bulk_str(msg.to_string())),
             Command::SET(key, val) => {
                 self.store
                     .set(key.to_string(), val.to_string())
                     .map(|_| println!("Key was already present in store"));
-                Ok(format!("+OK\r\n"))
+                Ok(self.responder.ok_reponse())
             }
             Command::SET_EXP(key, val, delta) => {
                 self.store
                     .set_exp(key.to_string(), val.to_string(), delta.clone())
                     .map(|_| println!("Key was already present in store"));
-                Ok(format!("+OK\r\n"))
+                Ok(self.responder.ok_reponse())
             }
             Command::GET(key) => {
                 let result = self.store.get(key);
                 match result {
-                    Some(saved) => Ok(format!("${}\r\n{}\r\n", saved.value.len(), saved.value)),
-                    None => Ok(format!("$-1\r\n")),
+                    Some(saved) => Ok(make_bulk_str(saved.value)),
+                    None => Ok(self.responder.empty_get_reponse()),
                 }
             }
-            Command::INFO(info_command) => Ok(make_info_str(&self.config)),
-            Command::REPLCONF => Ok(format!("+OK\r\n")),
+            Command::INFO(_) => Ok(make_info_str(&self.config)),
+            Command::REPLCONF => Ok(self.responder.ok_reponse()),
             Command::PSYNC => Ok(make_fullresync_str(&self.config)),
         }
     }
@@ -72,10 +72,10 @@ impl Connection {
     pub fn handle_stream(&mut self, mut stream: TcpStream) {
         loop {
             // Process the received data (you can replace this with your own logic)
-            let response: Result<String, String> = self.process_stream(&mut stream);
+            let response: Result<Vec<u8>, String> = self.process_stream(&mut stream);
             // Write back to the TcpStream
             stream
-                .write_all(response.expect("Couldn't get response").as_bytes())
+                .write_all(&response.expect("Couldn't get response"))
                 .unwrap();
         }
     }

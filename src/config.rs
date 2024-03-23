@@ -63,7 +63,7 @@ impl SlaveConfig {
         }
     }
 
-    pub fn config_string(&self) -> String {
+    pub fn config_string(&self) -> Vec<u8> {
         make_bulk_str(self.role_string())
     }
 
@@ -87,7 +87,7 @@ impl MasterConfig {
     }
 
 
-    pub fn config_string(&self) -> String {
+    pub fn config_string(&self) -> Vec<u8> {
         let strings = vec![
             self.role_string(),
             self.replication_id_out(),

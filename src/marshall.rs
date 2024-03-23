@@ -124,6 +124,7 @@ impl Marshaller {
                 .read_line(&mut segment)
                 .map_err(|_| String::from("Could not read next line"))?;
         }
+        println!("Segment: {}", segment);
         let (segment_type, data) = segment.trim().split_at(1);
 
         match segment_type {

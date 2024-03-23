@@ -32,10 +32,10 @@ pub enum Response {
 }
 
 impl Response {
-    pub fn respond(&self) -> String {
+    pub fn respond(&self) -> Vec<u8> {
         match self {
             Response::PONG => make_array_str(vec![make_bulk_str(String::from("pong"))]),
-            Response::OK => make_simple_str("OK"),
+            Response::OK => make_simple_str(String::from("OK")),
             Response::INFO(config) => make_info_str(&config)
         }
     }
@@ -76,22 +76,37 @@ impl Responder {
     pub fn new() -> Responder {
         Responder {}
     }
-    pub fn ping_request(&self) -> String {
+    pub fn ping_request(&self) -> Vec<u8> {
         make_array_str(vec![make_bulk_str(String::from("ping"))])
     }
 
+    pub fn pong_response(&self) -> Vec<u8> {
+       make_simple_str(String::from("PONG")) 
+    }
 
-    pub fn replconf_request_one(&self, replicated_port: &u32) ->  String {
+    pub fn empty_response(&self) -> Vec<u8> {
+        String::from("").as_bytes().to_vec()
+    }
+
+    pub fn ok_reponse(&self) -> Vec<u8> {
+        make_simple_str(String::from("OK"))
+    }
+
+    pub fn empty_get_reponse(&self) -> Vec<u8> {
+        String::from("$-1\r\n").as_bytes().to_vec()
+    }
+
+    pub fn replconf_request_one(&self, replicated_port: &u32) ->  Vec<u8> {
         let mut veccie = vec![String::from("REPLCONF"), String::from("listening-port"), replicated_port.to_string()];    
         make_array_str(veccie.iter().map(|s| make_bulk_str(s.to_string())).collect())
     }
 
-    pub fn replconf_request_two(&self) ->  String {
+    pub fn replconf_request_two(&self) ->  Vec<u8> {
         let mut veccie = vec![String::from("REPLCONF"), String::from("capa"), String::from("psync2")];    
         make_array_str(veccie.iter().map(|s| make_bulk_str(s.to_string())).collect())
     }
 
-    pub fn psync_request(&self) ->  String {
+    pub fn psync_request(&self) ->  Vec<u8> {
         let mut veccie = vec![String::from("PSYNC"), String::from("?"), String::from("-1")];    
         make_array_str(veccie.iter().map(|s| make_bulk_str(s.to_string())).collect())
     }
