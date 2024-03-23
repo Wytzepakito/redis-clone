@@ -34,7 +34,27 @@ impl MessageSegment {
 }
 
 impl Marshaller {
+    pub fn new() -> Marshaller {
+        Marshaller {}
+    }
     pub fn make_command(&mut self, words: MessageSegment) -> Result<Command, String> {
+        match words {
+            MessageSegment::Array(_) => self.match_command_from_arr(words),
+            MessageSegment::BulkString(_) => self.match_string(words),
+            MessageSegment::SimpleString(_) => self.match_string(words),
+        }
+    }
+
+    fn match_string(&mut self, words: MessageSegment) -> Result<Command, String> {
+        println!("{:?}", words.get_string()?);
+        match words.get_string()? {
+            "pong" => Ok(Command::PONG),
+            "ok" => Ok(Command::OK),
+            _ => Err(String::from("Unknown command")),
+        }
+    }
+
+    fn match_command_from_arr(&mut self, words: MessageSegment) -> Result<Command,String> {
         let array = words.get_array()?;
         let command = array[0].get_string()?;
 
@@ -44,6 +64,7 @@ impl Marshaller {
             "set" => self.match_set(array),
             "get" => Ok(Command::GET(array[1].get_string()?.to_string())),
             "info" => self.match_info(array),
+            "replconf" => Ok(Command::REPLCONF),
             _ => Err(String::from("Unknown command")),
         }
     }
@@ -142,6 +163,8 @@ impl Marshaller {
     }
 
     fn parse_simple_string(&self, data: &str) -> Result<MessageSegment, String> {
-        Ok(MessageSegment::SimpleString(data.to_string()))
+        Ok(MessageSegment::SimpleString(data.to_string().to_ascii_lowercase()))
     }
+
+    
 }

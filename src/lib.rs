@@ -4,17 +4,15 @@ pub mod connection;
 pub mod marshall;
 pub mod responder;
 pub mod store;
+pub mod formatter;
 use std::{
-    collections::HashMap,
-    io::Write,
-    net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-    thread,
+    collections::HashMap, io::Write, net::{TcpListener, TcpStream}, option, sync::{Arc, Mutex}, thread
 };
 
 use config::{Config, SlaveConfig};
+use responder::Command;
 
-use crate::config::{get_config, Role};
+use crate::{config::{get_config, Role}, marshall::Marshaller};
 
 use crate::responder::Responder; 
 use crate::connection::Connection;
@@ -29,19 +27,14 @@ impl RedisServer {
         RedisServer {}
     }
 
-    fn slave_handshake(&self, mut master_stream: TcpStream, replicated_port: &u32) {
-        let mut responder = Responder::new();
-        master_stream
-            .write_all(responder.ping_request().as_bytes())
-            .unwrap();
-        println!("Send ping");
-        
-        master_stream
-            .write_all(responder.replconf_request_one(replicated_port).as_bytes())
-            .unwrap();
-        master_stream
-            .write_all(responder.replconf_request_two().as_bytes())
-            .unwrap();
+    pub fn run(&mut self) {
+
+        let config = get_config();
+
+        match config.role {
+            Role::MASTER(_) => self.spawn_master(config),
+            Role::SLAVE(_) => self.spawn_slave(config),
+        }
     }
 
     fn spawn_slave(&mut self, config: Config) {
@@ -54,7 +47,7 @@ impl RedisServer {
                 .get_slave_config()
                 .expect("Slave config should be there")
                 .replicated_port;
-        let master_stream = TcpStream::connect(format!(
+        let mut master_stream = TcpStream::connect(format!(
             "127.0.0.1:{:0>4}",
             replicated_port
         ))
@@ -62,7 +55,7 @@ impl RedisServer {
         let hashmap = Arc::new(Mutex::new(HashMap::new()));
 
 
-        self.slave_handshake(master_stream, &config.port);
+        self.slave_handshake(&mut master_stream, &config.port).unwrap();
 
         while let (Ok((stream, _))) = listener.accept() {
 
@@ -72,6 +65,38 @@ impl RedisServer {
                 //handle_expirations(&mut redis);
                 redis.handle_stream(stream);
             });
+        }
+    }
+
+
+    fn slave_handshake(&self,master_stream:&mut TcpStream, replicated_port: &u32) -> Result<(), String> {
+        let mut responder = Responder::new();
+        println!("Send ping");
+        self.send_and_ack(master_stream, responder.ping_request(), Command::PONG)?;
+
+        
+        println!("Send replconf 1");
+        self.send_and_ack(master_stream, responder.replconf_request_one(replicated_port), Command::OK)?;
+        println!("{}", responder.replconf_request_one(replicated_port));
+
+        println!("Send replconf 2");
+        self.send_and_ack(master_stream, responder.replconf_request_two(), Command::OK)?;
+        println!("{}", responder.replconf_request_two());
+
+        Ok(())
+    }
+
+    fn send_and_ack(&self, master_stream: &mut TcpStream, request: String, expected_response: Command) -> Result<(), String> {
+        let mut marshall = Marshaller::new();
+        master_stream
+            .write_all(request.as_bytes())
+            .unwrap();
+        let words = marshall.parse_redis_command(master_stream);
+        println!("{:?}",words);
+        let optional_command = marshall.make_command(words?);
+        match optional_command? {
+            expected_response => Ok(()),
+            _ => Err(format!("Received unexpected command on {}", request))
         }
     }
 
@@ -91,13 +116,4 @@ impl RedisServer {
     }
 
 
-    pub fn run(&mut self) {
-
-        let config = get_config();
-
-        match config.role {
-            Role::MASTER(_) => self.spawn_master(config),
-            Role::SLAVE(_) => self.spawn_slave(config),
-        }
-    }
 }

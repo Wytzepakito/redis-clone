@@ -7,10 +7,7 @@ use std::{
 };
 
 use crate::{
-    config::Config,
-    marshall::Marshaller,
-    responder::{Command, Responder},
-    store::RedisDataStore,
+    config::Config, formatter::make_info_response, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
 };
 
 pub struct Connection {
@@ -43,6 +40,8 @@ impl Connection {
     pub fn process_command(&mut self, command: &Command) -> Result<String, String> {
         match command {
             Command::PING => Ok(format!("+PONG\r\n")),
+            Command::PONG => Ok(String::from("")),
+            Command::OK => Ok(String::from("")),
             Command::ECHO(msg) => Ok(format!("${}\r\n{}\r\n", msg.len(), msg)),
             Command::SET(key, val) => {
                 self.store
@@ -63,8 +62,8 @@ impl Connection {
                     None => Ok(format!("$-1\r\n")),
                 }
             }
-            Command::INFO(info_command) => Ok(self.responder.info_response(&self.config)),
-            _ => unimplemented!(),
+            Command::INFO(info_command) => Ok(make_info_response(&self.config)),
+            Command::REPLCONF => Ok(format!("+OK\r\n")),
         }
     }
 
@@ -72,7 +71,6 @@ impl Connection {
         loop {
             // Process the received data (you can replace this with your own logic)
             let response: Result<String, String> = self.process_stream(&mut stream);
-
             // Write back to the TcpStream
             stream
                 .write_all(response.expect("Couldn't get response").as_bytes())

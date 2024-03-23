@@ -1,5 +1,7 @@
 use clap::{arg, command, value_parser, Arg};
 
+use crate::formatter::{make_array_str, make_bulk_str};
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub role: Role,
@@ -16,7 +18,7 @@ impl Role {
     pub fn get_slave_config(&self) -> Result<&SlaveConfig, String> {
         match self {
             Role::SLAVE(v) => Ok(v),
-            _ => Err(String::from("Not an array")),
+            _ => Err(String::from("Not a slave")),
         }
     }
 }
@@ -60,6 +62,14 @@ impl SlaveConfig {
                 .expect("Couldn't parse second arg of replicaof"),
         }
     }
+
+    pub fn config_string(&self) -> String {
+        make_bulk_str(self.role_string())
+    }
+
+    fn role_string(&self) -> String {
+        String::from("role:slave")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -82,15 +92,11 @@ impl MasterConfig {
             self.replication_id_out(),
             self.replication_offset_out(),
         ];
-        format!(
-            "${}\r\n{}\r\n",
-            strings.join("\n").len(),
-            strings.join("\n")
-        )
+        make_bulk_str(strings.join("\n"))
     }
 
     pub fn role_string(&self) -> String {
-        "role:master".to_owned()
+        String::from("role:master")
     }
     pub fn replication_id_out(&self) -> String {
         format!("master_replid:{}", self.replication_id)
