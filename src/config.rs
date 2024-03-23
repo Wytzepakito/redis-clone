@@ -86,6 +86,7 @@ impl MasterConfig {
         }
     }
 
+
     pub fn config_string(&self) -> String {
         let strings = vec![
             self.role_string(),
