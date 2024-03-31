@@ -1,16 +1,10 @@
-use std::{
-    collections::HashMap,
-    io::Write,
-    net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{io::Write, net::TcpStream, thread, time::Duration};
 
 use crate::{
-    config::{Config, Master, Role},
-    formatter::{make_bulk_str, make_fullresync_str, make_info_str, make_simple_str},
+    config::Config,
+    formatter::{make_bulk_str, make_fullresync_str, make_info_str},
     marshall::Marshaller,
-    responder::{Command, ReplConfItem, Responder},
+    responder::{Command, Responder},
     store::RedisDataStore,
 };
 
@@ -31,20 +25,21 @@ impl Connection {
         }
     }
 
-    pub fn process_stream(&mut self, stream: &mut TcpStream) -> Result<Vec<u8>, String> {
+    pub fn process_stream(&mut self, stream: &TcpStream) -> Result<Vec<u8>, String> {
         let words = self.marshaller.parse_redis_command(stream);
         println!("words received: {:?}", words);
         let optional_command = self
             .marshaller
             .make_command(words.expect("Couldn't get words"));
         let command = optional_command.expect("Couldn't get command");
+
         self.process_command(&command, stream)
     }
 
     pub fn process_command(
         &mut self,
         command: &Command,
-        stream: &mut TcpStream,
+        stream: &TcpStream,
     ) -> Result<Vec<u8>, String> {
         match command {
             Command::PING => Ok(self.responder.pong_response()),
@@ -56,11 +51,11 @@ impl Connection {
                 self.store
                     .set(key.to_string(), val.to_string())
                     .map(|_| println!("Key was already present in store"));
-                let mut master = self.config.get_master();
+                let master = self.config.get_master();
                 master.propagate_commands(self.responder.copy_request(command));
                 Ok(self.responder.ok_reponse())
             }
-            Command::SET_EXP(key, val, delta) => {
+            Command::SETEXP(key, val, delta) => {
                 self.store
                     .set_exp(key.to_string(), val.to_string(), delta.clone())
                     .map(|_| println!("Key was already present in store"));
@@ -74,9 +69,9 @@ impl Connection {
                 }
             }
             Command::INFO(_) => Ok(make_info_str(&self.config)),
-            Command::REPLCONF(replconf_item) => Ok(self.responder.ok_reponse()),
+            Command::REPLCONF(_) => Ok(self.responder.ok_reponse()),
             Command::PSYNC => {
-                let mut master = self.config.get_master();
+                let master = self.config.get_master();
                 let mut locked_streams = master.streams.lock().unwrap();
                 locked_streams.push(stream.try_clone().unwrap());
                 Ok(make_fullresync_str(&self.config))
@@ -88,14 +83,19 @@ impl Connection {
         loop {
             // Process the received data (you can replace this with your own logic)
             let response: Result<Vec<u8>, String> = self.process_stream(&mut stream);
-            println!(
-                "Sending: {:?}",
-                String::from_utf8_lossy(&response.clone().unwrap())
-            );
+
             // Write back to the TcpStream
             stream
                 .write_all(&response.expect("Couldn't get response"))
                 .unwrap();
+        }
+    }
+
+    pub fn handle_master_stream(&mut self, mut master_stream: TcpStream) {
+        loop {
+            let _ = self.process_stream(&mut master_stream);
+
+            thread::sleep(Duration::from_millis(100));
         }
     }
 }

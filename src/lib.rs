@@ -8,12 +8,11 @@ use std::{
     collections::HashMap,
     io::Write,
     net::{TcpListener, TcpStream},
-    option,
     sync::{Arc, Mutex},
     thread,
 };
 
-use config::{Config, Slave};
+use config::Config;
 use responder::Command;
 
 use crate::{
@@ -48,14 +47,22 @@ impl RedisServer {
             .get_slave()
             .expect("Slave config should be there")
             .replicated_port;
+        let hashmap = Arc::new(Mutex::new(HashMap::new()));
         let mut master_stream =
             TcpStream::connect(format!("127.0.0.1:{:0>4}", replicated_port)).unwrap();
-        let hashmap = Arc::new(Mutex::new(HashMap::new()));
-
-        self.slave_handshake(&mut master_stream, &config.port)
+        self.slave_handshake(&mut master_stream, replicated_port)
             .unwrap();
 
-        while let (Ok((stream, _))) = listener.accept() {
+        let store = RedisDataStore::new(hashmap.clone());
+        let mut master_redis = Connection::new(store, config.clone());
+        println!("Reached here 2");
+        thread::spawn(move || {
+            master_redis.handle_master_stream(master_stream);
+        });
+
+        println!("Reached here 1");
+        while let Ok((stream, _)) = listener.accept() {
+            println!("spawned listener");
             let store = RedisDataStore::new(hashmap.clone());
             let mut redis = Connection::new(store, config.clone());
             thread::spawn(move || {
@@ -70,7 +77,7 @@ impl RedisServer {
         master_stream: &mut TcpStream,
         replicated_port: &u32,
     ) -> Result<(), String> {
-        let mut responder = Responder::new();
+        let responder = Responder::new();
         self.send_and_ack(master_stream, responder.ping_request(), Command::PONG)?;
 
         self.send_and_ack(
@@ -95,9 +102,9 @@ impl RedisServer {
         request: Vec<u8>,
         expected_response: Command,
     ) -> Result<(), String> {
-        let mut marshall = Marshaller::new();
+        let marshall = Marshaller::new();
         master_stream.write_all(&request).unwrap();
-        let words = marshall.parse_redis_command(master_stream);
+        let words = marshall.parse_redis_command(&master_stream);
         println!("{:?}", words);
         let command = marshall.make_command(words?)?;
 

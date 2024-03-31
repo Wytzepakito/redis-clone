@@ -1,5 +1,4 @@
-use chrono::{Duration, TimeDelta};
-use core::time;
+use chrono::TimeDelta;
 use std::{
     io::{BufRead, BufReader},
     net::TcpStream,
@@ -37,7 +36,7 @@ impl Marshaller {
     pub fn new() -> Marshaller {
         Marshaller {}
     }
-    pub fn make_command(&mut self, words: MessageSegment) -> Result<Command, String> {
+    pub fn make_command(&self, words: MessageSegment) -> Result<Command, String> {
         match words {
             MessageSegment::Array(_) => self.match_command_from_arr(words),
             MessageSegment::BulkString(_) => self.match_string(words),
@@ -45,7 +44,7 @@ impl Marshaller {
         }
     }
 
-    fn match_string(&mut self, words: MessageSegment) -> Result<Command, String> {
+    fn match_string(&self, words: MessageSegment) -> Result<Command, String> {
         // We could maybe in the future use a RegexSet for this but for now we'll use an ugly if/else block
         println!("{:?}", words.get_string()?);
         if words.get_string()?.starts_with("pong") {
@@ -59,7 +58,7 @@ impl Marshaller {
         }
     }
 
-    fn match_command_from_arr(&mut self, words: MessageSegment) -> Result<Command, String> {
+    fn match_command_from_arr(&self, words: MessageSegment) -> Result<Command, String> {
         let array = words.get_array()?;
         let command = array[0].get_string()?;
 
@@ -91,7 +90,7 @@ impl Marshaller {
                 array[1].get_string()?.to_string(),
                 array[2].get_string()?.to_string(),
             )),
-            5 => Ok(Command::SET_EXP(
+            5 => Ok(Command::SETEXP(
                 array[1].get_string()?.to_string(),
                 array[2].get_string()?.to_string(),
                 self.parse_time(array[4].get_string()?.to_string())?,
@@ -115,26 +114,20 @@ impl Marshaller {
             .ok_or(String::from("Could't parse miliseconds into TimeDelta"))
     }
 
-    pub fn parse_redis_command(
-        &self,
-        stream: &mut std::net::TcpStream,
-    ) -> Result<MessageSegment, String> {
+    pub fn parse_redis_command(&self, stream: &TcpStream) -> Result<MessageSegment, String> {
         let mut reader = BufReader::new(stream);
 
         self.parse_segment(&mut reader)
     }
 
-    fn parse_segment(
-        &self,
-        reader: &mut BufReader<&mut TcpStream>,
-    ) -> Result<MessageSegment, String> {
+    fn parse_segment(&self, reader: &mut BufReader<&TcpStream>) -> Result<MessageSegment, String> {
         let mut segment = String::new();
         while segment.is_empty() {
             reader
                 .read_line(&mut segment)
                 .map_err(|_| String::from("Could not read next line"))?;
         }
-        println!("Segment: {}", segment);
+        println!("{:?}", segment);
         let (segment_type, data) = segment.trim().split_at(1);
 
         match segment_type {
@@ -148,7 +141,7 @@ impl Marshaller {
     fn parse_array(
         &self,
         data: &str,
-        reader: &mut BufReader<&mut TcpStream>,
+        reader: &mut BufReader<&TcpStream>,
     ) -> Result<MessageSegment, String> {
         let element_count: i32 = data
             .parse()
@@ -168,7 +161,7 @@ impl Marshaller {
 
     fn parse_bulk_string(
         &self,
-        reader: &mut BufReader<&mut TcpStream>,
+        reader: &mut BufReader<&TcpStream>,
     ) -> Result<MessageSegment, String> {
         let mut segment = String::new();
         reader

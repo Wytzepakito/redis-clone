@@ -6,7 +6,7 @@ use std::{
 
 use clap::{arg, command, value_parser, Arg};
 
-use crate::formatter::{make_array_str, make_bulk_str};
+use crate::formatter::make_bulk_str;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -63,16 +63,17 @@ pub struct Slave {
 
 impl Slave {
     pub fn new(vec: Vec<&str>) -> Slave {
+        let port = vec
+            .get(1)
+            .expect("Couldn't get second arg of replicaof")
+            .parse::<u32>()
+            .expect("Couldn't parse second arg of replicaof");
         Slave {
             replicated_host: vec
                 .get(0)
                 .expect("Couldn't get first arg of replicaof")
                 .to_string(),
-            replicated_port: vec
-                .get(1)
-                .expect("Couldn't get second arg of replicaof")
-                .parse::<u32>()
-                .expect("Couldn't parse second arg of replicaof"),
+            replicated_port: port,
         }
     }
 

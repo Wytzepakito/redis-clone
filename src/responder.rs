@@ -1,13 +1,10 @@
 use core::fmt;
-use std::{
-    fmt::{format, write, Display},
-    time::Duration,
-};
+use std::fmt::Display;
 
 use chrono::TimeDelta;
 
 use crate::{
-    config::{Config, Role},
+    config::Config,
     formatter::{make_array_str, make_bulk_str, make_info_str, make_simple_str},
 };
 
@@ -21,7 +18,7 @@ pub enum Command {
     INFO(InfoCommand),
     ECHO(String),
     SET(String, String),
-    SET_EXP(String, String, TimeDelta),
+    SETEXP(String, String, TimeDelta),
     GET(String),
     REPLCONF(ReplConfItem),
     PSYNC,
@@ -67,7 +64,7 @@ impl Display for Command {
             Command::OK => write!(f, "OK"),
             Command::ECHO(msg) => write!(f, "ECHO({})", msg),
             Command::SET(key, val) => write!(f, "SET({}, {})", key, val),
-            Command::SET_EXP(key, val, dur) => write!(f, "SET({}, {}, {:?})", key, val, dur),
+            Command::SETEXP(key, val, dur) => write!(f, "SET({}, {}, {:?})", key, val, dur),
             Command::GET(key) => write!(f, "GET({})", key),
             Command::INFO(info_command) => write!(f, "INFO({})", info_command),
             Command::REPLCONF(replconf_item) => write!(f, "REPLCONF({})", replconf_item),
@@ -95,7 +92,7 @@ impl Responder {
         Responder {}
     }
 
-    pub fn make_reponse(&self, command: Command) -> Vec<u8> {
+    pub fn make_reponse(&self) -> Vec<u8> {
         unimplemented!()
     }
 
@@ -115,7 +112,7 @@ impl Responder {
                 make_bulk_str(key.to_string()),
                 make_bulk_str(val.to_string()),
             ]),
-            Command::SET_EXP(key, val, time) => make_array_str(vec![
+            Command::SETEXP(key, val, time) => make_array_str(vec![
                 make_bulk_str(String::from("set")),
                 make_bulk_str(key.to_string()),
                 make_bulk_str(val.to_string()),
@@ -145,10 +142,9 @@ impl Responder {
     pub fn empty_get_reponse(&self) -> Vec<u8> {
         String::from("$-1\r\n").as_bytes().to_vec()
     }
-    
 
     pub fn replconf_request_one(&self, replicated_port: &u32) -> Vec<u8> {
-        let mut veccie = vec![
+        let veccie = vec![
             String::from("REPLCONF"),
             String::from("listening-port"),
             replicated_port.to_string(),
@@ -162,7 +158,7 @@ impl Responder {
     }
 
     pub fn replconf_request_two(&self) -> Vec<u8> {
-        let mut veccie = vec![
+        let veccie = vec![
             String::from("REPLCONF"),
             String::from("capa"),
             String::from("psync2"),
@@ -176,7 +172,7 @@ impl Responder {
     }
 
     pub fn psync_request(&self) -> Vec<u8> {
-        let mut veccie = vec![String::from("PSYNC"), String::from("?"), String::from("-1")];
+        let veccie = vec![String::from("PSYNC"), String::from("?"), String::from("-1")];
         make_array_str(
             veccie
                 .iter()

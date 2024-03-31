@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chrono::{DateTime, Duration, Local, TimeDelta};
+use chrono::{DateTime, Local, TimeDelta};
 
 pub struct RedisDataStore {
     shared_map: Arc<Mutex<HashMap<String, SavedItem>>>,
@@ -65,8 +65,8 @@ impl RedisDataStore {
 
     pub fn set(&mut self, key: String, val: String) -> Option<SavedItem> {
         let mut map = self.shared_map.lock().unwrap();
-        let savedItem = SavedItem::new(val, None);
-        let stuff = map.insert(key, savedItem);
+        let saved_item = SavedItem::new(val, None);
+        let stuff = map.insert(key, saved_item);
 
         stuff
     }
@@ -81,7 +81,7 @@ impl RedisDataStore {
                 }
             }
         }
-        if (is_expired) {
+        if is_expired {
             map.remove(key);
             None
         } else {
