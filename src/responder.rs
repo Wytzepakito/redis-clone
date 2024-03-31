@@ -125,6 +125,7 @@ impl Responder {
             _ => unimplemented!("These commands were not implemented yet"),
         }
     }
+    
     pub fn ping_request(&self) -> Vec<u8> {
         make_array_str(vec![make_bulk_str(String::from("ping"))])
     }
