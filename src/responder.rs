@@ -125,7 +125,7 @@ impl Responder {
             _ => unimplemented!("These commands were not implemented yet"),
         }
     }
-    
+
     pub fn ping_request(&self) -> Vec<u8> {
         make_array_str(vec![make_bulk_str(String::from("ping"))])
     }
@@ -145,6 +145,7 @@ impl Responder {
     pub fn empty_get_reponse(&self) -> Vec<u8> {
         String::from("$-1\r\n").as_bytes().to_vec()
     }
+    
 
     pub fn replconf_request_one(&self, replicated_port: &u32) -> Vec<u8> {
         let mut veccie = vec![
