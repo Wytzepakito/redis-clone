@@ -5,7 +5,7 @@ use std::{
     net::TcpStream,
 };
 
-use crate::responder::{Command, InfoCommand};
+use crate::responder::{Command, InfoCommand, ReplConfItem};
 
 pub struct Marshaller {}
 
@@ -54,12 +54,12 @@ impl Marshaller {
             Ok(Command::OK)
         } else if words.get_string()?.starts_with("fullresync") {
             Ok(Command::FULLRESYNC)
-        } else  {
+        } else {
             Err(String::from("Unknown command"))
         }
     }
 
-    fn match_command_from_arr(&mut self, words: MessageSegment) -> Result<Command,String> {
+    fn match_command_from_arr(&mut self, words: MessageSegment) -> Result<Command, String> {
         let array = words.get_array()?;
         let command = array[0].get_string()?;
 
@@ -69,9 +69,19 @@ impl Marshaller {
             "set" => self.match_set(array),
             "get" => Ok(Command::GET(array[1].get_string()?.to_string())),
             "info" => self.match_info(array),
-            "replconf" => Ok(Command::REPLCONF),
+            "replconf" => Ok(Command::REPLCONF(self.match_replconf(array)?)),
             "psync" => Ok(Command::PSYNC),
             _ => Err(String::from("Unknown command")),
+        }
+    }
+
+    fn match_replconf(&self, array: &Vec<MessageSegment>) -> Result<ReplConfItem, String> {
+        let replcommand = array[1].get_string()?;
+
+        match replcommand {
+            "capa" => Ok(ReplConfItem::CAPA(array[2].get_string()?.to_string())),
+            "listening-port" => Ok(ReplConfItem::LISTENPORT(array[2].get_string()?.to_string())),
+            _ => Err(String::from("Unknown replconf")),
         }
     }
 
@@ -170,8 +180,8 @@ impl Marshaller {
     }
 
     fn parse_simple_string(&self, data: &str) -> Result<MessageSegment, String> {
-        Ok(MessageSegment::SimpleString(data.to_string().to_ascii_lowercase()))
+        Ok(MessageSegment::SimpleString(
+            data.to_string().to_ascii_lowercase(),
+        ))
     }
-
-    
 }

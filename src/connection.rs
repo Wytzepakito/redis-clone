@@ -7,7 +7,11 @@ use std::{
 };
 
 use crate::{
-    config::Config, formatter::{make_bulk_str, make_fullresync_str, make_info_str, make_simple_str}, marshall::Marshaller, responder::{Command, Responder}, store::RedisDataStore
+    config::{Config, Master, Role},
+    formatter::{make_bulk_str, make_fullresync_str, make_info_str, make_simple_str},
+    marshall::Marshaller,
+    responder::{Command, ReplConfItem, Responder},
+    store::RedisDataStore,
 };
 
 pub struct Connection {
@@ -34,10 +38,14 @@ impl Connection {
             .marshaller
             .make_command(words.expect("Couldn't get words"));
         let command = optional_command.expect("Couldn't get command");
-        self.process_command(&command)
+        self.process_command(&command, stream)
     }
 
-    pub fn process_command(&mut self, command: &Command) -> Result<Vec<u8>, String> {
+    pub fn process_command(
+        &mut self,
+        command: &Command,
+        stream: &mut TcpStream,
+    ) -> Result<Vec<u8>, String> {
         match command {
             Command::PING => Ok(self.responder.pong_response()),
             Command::PONG => Ok(self.responder.empty_response()),
@@ -48,6 +56,8 @@ impl Connection {
                 self.store
                     .set(key.to_string(), val.to_string())
                     .map(|_| println!("Key was already present in store"));
+                let mut master = self.config.get_master();
+                master.propagate_commands(self.responder.copy_request(command));
                 Ok(self.responder.ok_reponse())
             }
             Command::SET_EXP(key, val, delta) => {
@@ -64,8 +74,13 @@ impl Connection {
                 }
             }
             Command::INFO(_) => Ok(make_info_str(&self.config)),
-            Command::REPLCONF => Ok(self.responder.ok_reponse()),
-            Command::PSYNC => Ok(make_fullresync_str(&self.config)),
+            Command::REPLCONF(replconf_item) => Ok(self.responder.ok_reponse()),
+            Command::PSYNC => {
+                let mut master = self.config.get_master();
+                let mut locked_streams = master.streams.lock().unwrap();
+                locked_streams.push(stream.try_clone().unwrap());
+                Ok(make_fullresync_str(&self.config))
+            }
         }
     }
 
@@ -73,6 +88,10 @@ impl Connection {
         loop {
             // Process the received data (you can replace this with your own logic)
             let response: Result<Vec<u8>, String> = self.process_stream(&mut stream);
+            println!(
+                "Sending: {:?}",
+                String::from_utf8_lossy(&response.clone().unwrap())
+            );
             // Write back to the TcpStream
             stream
                 .write_all(&response.expect("Couldn't get response"))

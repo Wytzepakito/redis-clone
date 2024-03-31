@@ -1,3 +1,9 @@
+use std::{
+    io::Write,
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
+
 use clap::{arg, command, value_parser, Arg};
 
 use crate::formatter::{make_array_str, make_bulk_str};
@@ -10,12 +16,12 @@ pub struct Config {
 
 #[derive(Debug, Clone)]
 pub enum Role {
-    MASTER(MasterConfig),
-    SLAVE(SlaveConfig),
+    MASTER(Master),
+    SLAVE(Slave),
 }
 
 impl Role {
-    pub fn get_slave_config(&self) -> Result<&SlaveConfig, String> {
+    pub fn get_slave(&self) -> Result<&Slave, String> {
         match self {
             Role::SLAVE(v) => Ok(v),
             _ => Err(String::from("Not a slave")),
@@ -34,23 +40,30 @@ impl Config {
     pub fn from_args(args: InputArgs) -> Config {
         Config {
             role: match args.replica_of {
-                Some(args) => Role::SLAVE(SlaveConfig::new(args)),
-                None => Role::MASTER(MasterConfig::new()),
+                Some(args) => Role::SLAVE(Slave::new(args)),
+                None => Role::MASTER(Master::new()),
             },
             port: args.port,
+        }
+    }
+
+    pub fn get_master(&self) -> &Master {
+        match &self.role {
+            Role::MASTER(master_config) => master_config,
+            Role::SLAVE(_) => panic!("This can't happen"),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct SlaveConfig {
+pub struct Slave {
     pub replicated_host: String,
     pub replicated_port: u32,
 }
 
-impl SlaveConfig {
-    pub fn new(vec: Vec<&str>) -> SlaveConfig {
-        SlaveConfig {
+impl Slave {
+    pub fn new(vec: Vec<&str>) -> Slave {
+        Slave {
             replicated_host: vec
                 .get(0)
                 .expect("Couldn't get first arg of replicaof")
@@ -73,19 +86,20 @@ impl SlaveConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct MasterConfig {
+pub struct Master {
     pub replication_id: String,
     pub offset: u32,
+    pub streams: Arc<Mutex<Vec<TcpStream>>>,
 }
 
-impl MasterConfig {
-    pub fn new() -> MasterConfig {
-        MasterConfig {
+impl Master {
+    pub fn new() -> Master {
+        Master {
             replication_id: String::from("8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"),
             offset: 0,
+            streams: Arc::new(Mutex::new(Vec::new())),
         }
     }
-
 
     pub fn config_string(&self) -> Vec<u8> {
         let strings = vec![
@@ -105,6 +119,15 @@ impl MasterConfig {
 
     pub fn replication_offset_out(&self) -> String {
         format!("master_repl_offset:{}", self.offset)
+    }
+
+    pub fn propagate_commands(&self, command: Vec<u8>) {
+        let locked_streams = self.streams.lock().unwrap();
+        for mut stream in locked_streams.iter() {
+            stream
+                .write(&command)
+                .expect("Error when writing to slave stream");
+        }
     }
 }
 
