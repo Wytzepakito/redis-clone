@@ -46,6 +46,7 @@ impl Marshaller {
 
     fn match_string(&self, words: MessageSegment) -> Result<Command, String> {
         // We could maybe in the future use a RegexSet for this but for now we'll use an ugly if/else block
+        println!("Strings are:");
         println!("{:?}", words.get_string()?);
         if words.get_string()?.starts_with("pong") {
             Ok(Command::PONG)
@@ -120,14 +121,18 @@ impl Marshaller {
         self.parse_segment(&mut reader)
     }
 
+
     fn parse_segment(&self, reader: &mut BufReader<&TcpStream>) -> Result<MessageSegment, String> {
         let mut segment = String::new();
         while segment.is_empty() {
             reader
                 .read_line(&mut segment)
-                .map_err(|_| String::from("Could not read next line"))?;
+                .map_err(|err|{
+                    println!("err: {:?}", err);
+                    String::from("Could not read next line")
+                } )?;
         }
-        println!("{:?}", segment);
+
         let (segment_type, data) = segment.trim().split_at(1);
 
         match segment_type {
@@ -150,7 +155,7 @@ impl Marshaller {
                     "Could not parse array length {data} with error {e}."
                 ))
             })
-            .expect("Couldn't get element count");
+            .expect("Couldn't parse this!");
         let mut words = Vec::new();
 
         for _ in 0..element_count {
@@ -166,7 +171,10 @@ impl Marshaller {
         let mut segment = String::new();
         reader
             .read_line(&mut segment)
-            .map_err(|_| String::from("Could not read next line"))?;
+            .map_err(|err| {
+                println!("err: {:?}", err);
+                String::from("Could not read next line")
+            })?;
         Ok(MessageSegment::BulkString(
             segment.trim().to_owned().to_ascii_lowercase(),
         ))

@@ -47,12 +47,13 @@ impl Config {
         }
     }
 
-    pub fn get_master(&self) -> &Master {
+    pub fn get_master(&self) -> Option<&Master> {
         match &self.role {
-            Role::MASTER(master_config) => master_config,
-            Role::SLAVE(_) => panic!("This can't happen"),
+            Role::MASTER(master_config) => Some(master_config),
+            Role::SLAVE(_) => None,
         }
     }
+
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +85,7 @@ impl Slave {
     fn role_string(&self) -> String {
         String::from("role:slave")
     }
+    
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +126,8 @@ impl Master {
 
     pub fn propagate_commands(&self, command: Vec<u8>) {
         let locked_streams = self.streams.lock().unwrap();
+        println!("Propagating commands:");
+        println!("{:?}", command);
         for mut stream in locked_streams.iter() {
             stream
                 .write(&command)

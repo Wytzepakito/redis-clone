@@ -2,11 +2,12 @@ pub mod config;
 pub mod connection;
 pub mod formatter;
 pub mod marshall;
+pub mod lines_marshall;
 pub mod responder;
 pub mod store;
 use std::{
     collections::HashMap,
-    io::Write,
+    io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
@@ -50,19 +51,17 @@ impl RedisServer {
         let hashmap = Arc::new(Mutex::new(HashMap::new()));
         let mut master_stream =
             TcpStream::connect(format!("127.0.0.1:{:0>4}", replicated_port)).unwrap();
-        self.slave_handshake(&mut master_stream, replicated_port)
+        self.slave_handshake(&mut master_stream, &config.port)
             .unwrap();
 
         let store = RedisDataStore::new(hashmap.clone());
         let mut master_redis = Connection::new(store, config.clone());
-        println!("Reached here 2");
+        self.slave_discard_rdb_file(&mut master_stream);
         thread::spawn(move || {
             master_redis.handle_master_stream(master_stream);
         });
 
-        println!("Reached here 1");
         while let Ok((stream, _)) = listener.accept() {
-            println!("spawned listener");
             let store = RedisDataStore::new(hashmap.clone());
             let mut redis = Connection::new(store, config.clone());
             thread::spawn(move || {
@@ -109,9 +108,6 @@ impl RedisServer {
         let command = marshall.make_command(words?)?;
 
         if &command == &Command::FULLRESYNC {
-            println!("Got here");
-            //let words = marshall.parse_redis_command(master_stream);
-            //println!("{:?}",words);
             Ok(())
         } else if &command == &expected_response {
             Ok(())
@@ -120,6 +116,28 @@ impl RedisServer {
                 "Received unexpected command on {}",
                 String::from_utf8(request).unwrap()
             ))
+        }
+    }
+
+    fn slave_discard_rdb_file(
+        &self,
+        master_stream: &mut TcpStream,
+    ) {
+        let mut reader = BufReader::new(master_stream);
+        let mut segment = String::new();
+        while segment.is_empty() {
+            let result = reader
+                .read_line(&mut segment)
+                .map_err(|err|{
+                    println!("err: {:?}", err);
+                    String::from("Could not read next line")
+                } );
+
+            match result {
+                Ok(_) => println!("Reading RDB file went OK"),
+                Err(_) => println!("Reading RDB file went KO")
+            }
+            println!("{:?}", segment);
         }
     }
 
