@@ -1,10 +1,11 @@
+use bytes::Buf;
 use chrono::TimeDelta;
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Read},
     net::TcpStream,
 };
 
-use crate::responder::{Command, InfoCommand, ReplConfItem};
+use crate::{model::resync_response::ResyncResponse, responder::{Command, InfoCommand, ReplConfItem}};
 
 pub struct Marshaller {}
 
@@ -115,14 +116,57 @@ impl Marshaller {
             .ok_or(String::from("Could't parse miliseconds into TimeDelta"))
     }
 
-    pub fn parse_redis_command(&self, stream: &TcpStream) -> Result<MessageSegment, String> {
+    pub fn parse_resync(&self, stream: &TcpStream) -> Result<ResyncResponse, String> {
+
         let mut reader = BufReader::new(stream);
 
+        let segment = self.parse_segment(&mut reader)?;
+
+        let mut length_buffer = Vec::new();
+        reader.read_until(b'\n', &mut length_buffer).map_err(|_| "Couldn't read rdb length buffer")?;
+        let full: String = String::from_utf8_lossy(&length_buffer).to_string();
+        let truncated: String = full[1..full.len() -2 ].to_string();
+        let rdb_length = truncated.parse::<usize>().map_err(|_| "Couldn't parse rdb length string")?;
+
+
+        let mut data_buffer: Vec<u8> = Vec::with_capacity(rdb_length);
+        data_buffer.resize(rdb_length, 0);
+        reader.read_exact(&mut data_buffer).map_err(|_| "Couldn't read rdb data buffer")?;
+        let data_string: String = String::from_utf8_lossy(&data_buffer).to_string();
+
+        Ok(ResyncResponse::new(segment, data_string))
+    }
+
+    pub fn parse_full_buffer(&self, stream: &TcpStream) -> Vec<Result<MessageSegment, String>> {
+
+        let mut reader = BufReader::new(stream);
+        let mut segment = String::new();
+        let mut segments = Vec::new();
+
+        while let Ok(line) = reader.read_line(&mut segment) {
+
+            let (segment_type, data) = segment.trim().split_at(1);
+
+            let one_command = match segment_type {
+                "*" => self.parse_array(data, &mut reader),
+                "$" => self.parse_bulk_string(&mut reader),
+                "+" => self.parse_simple_string(data),
+                _ => unimplemented!(),
+            };
+            segments.push(one_command);
+        }
+
+        segments
+    }
+
+
+    pub fn parse_redis_command(&self, stream: &TcpStream) -> Result<MessageSegment, String> {
+        let mut reader = BufReader::new(stream);
         self.parse_segment(&mut reader)
     }
 
 
-    fn parse_segment(&self, reader: &mut BufReader<&TcpStream>) -> Result<MessageSegment, String> {
+    fn parse_segment<R: BufRead>(&self, reader: &mut R) -> Result<MessageSegment, String> {
         let mut segment = String::new();
         while segment.is_empty() {
             reader
@@ -143,10 +187,10 @@ impl Marshaller {
         }
     }
 
-    fn parse_array(
+    fn parse_array<R: BufRead>(
         &self,
         data: &str,
-        reader: &mut BufReader<&TcpStream>,
+        reader: &mut R
     ) -> Result<MessageSegment, String> {
         let element_count: i32 = data
             .parse()
@@ -164,9 +208,9 @@ impl Marshaller {
         Ok(MessageSegment::Array(words))
     }
 
-    fn parse_bulk_string(
+    fn parse_bulk_string<R: BufRead>(
         &self,
-        reader: &mut BufReader<&TcpStream>,
+        reader: &mut R
     ) -> Result<MessageSegment, String> {
         let mut segment = String::new();
         reader

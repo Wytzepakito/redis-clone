@@ -50,10 +50,8 @@ fn make_resync_str(config: &Master) -> Vec<u8> {
     
     string2.extend(format!("${}\r\n", bytes2.len()).as_bytes());
     string2.extend(bytes2);    // Attempt to convert Vec<u8> to String
-    match String::from_utf8(string2) {
-        Ok(s) => println!("Converted string: {}", s),
-        Err(e) => println!("Error: {}", e),
-    }
+    let s = String::from_utf8_lossy(&string2);
+    println!("Converted string: {}", s);
     string
 }
 

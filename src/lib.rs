@@ -4,6 +4,7 @@ pub mod formatter;
 pub mod marshall;
 pub mod responder;
 pub mod store;
+pub mod model;
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Write},
@@ -13,7 +14,9 @@ use std::{
 };
 
 use config::Config;
-use formatter::make_simple_str;
+use formatter::{make_array_str, make_bulk_str, make_simple_str};
+use marshall::MessageSegment;
+use model::resync_response::ResyncResponse;
 use responder::Command;
 
 use crate::{
@@ -58,7 +61,6 @@ impl RedisServer {
         println!("Store instantiated");
         let mut master_redis = Connection::new(store, config.clone());
         println!("master_redis instantiated");
-        self.slave_discard_rdb_file(&mut master_stream);
         println!("slave discard rdb ran");
         thread::spawn(move || {
             master_redis.handle_master_stream(master_stream);
@@ -81,7 +83,7 @@ impl RedisServer {
         replicated_port: &u32,
     ) -> Result<(), String> {
         let responder = Responder::new();
-        self.send_and_ack(master_stream, make_simple_str(String::from("PING")), Command::PONG)?;
+        self.send_and_ack(master_stream, make_array_str(vec![make_bulk_str(String::from("ping"))]), Command::PONG)?;
 
         self.send_and_ack(
             master_stream,
@@ -107,41 +109,22 @@ impl RedisServer {
     ) -> Result<(), String> {
         let marshall = Marshaller::new();
         master_stream.write_all(&request).unwrap();
-        let words = marshall.parse_redis_command(&master_stream);
-        println!("In send and ack words: {:?}", words);
-        let command = marshall.make_command(words?)?;
-
-        if &command == &Command::FULLRESYNC {
-            Ok(())
-        } else if &command == &expected_response {
+        if &expected_response == &Command::FULLRESYNC {
+            let words: Result<ResyncResponse, String> = marshall.parse_resync(&master_stream);
+            println!("{:?}", words);
             Ok(())
         } else {
-            Err(format!(
-                "Received unexpected command on {}",
-                String::from_utf8(request).unwrap()
-            ))
-        }
-    }
+            let words = marshall.parse_redis_command(&master_stream);
+            let command = marshall.make_command(words?)?;
 
-    fn slave_discard_rdb_file(
-        &self,
-        master_stream: &mut TcpStream,
-    ) {
-        let mut reader = BufReader::new(master_stream);
-        let mut segment = String::new();
-        while segment.is_empty() {
-            let result = reader
-                .read_line(&mut segment)
-                .map_err(|err|{
-                    println!("err: {:?}", err);
-                    String::from("Could not read next line")
-                } );
-
-            match result {
-                Ok(_) => println!("Reading RDB file went OK"),
-                Err(_) => println!("Reading RDB file went KO")
+            if &command == &expected_response {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Received unexpected command on {}",
+                    String::from_utf8(request).unwrap()
+                ))
             }
-            println!("{:?}", segment);
         }
     }
 
