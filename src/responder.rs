@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::Display;
+use std::{fmt::Display, io::Write, net::TcpStream};
 
 use chrono::TimeDelta;
 
@@ -98,7 +98,7 @@ impl Responder {
 
     pub fn copy_request(&self, command: &Command) -> Vec<u8> {
         match command {
-            Command::OK => self.ok_reponse(),
+            Command::OK => make_simple_str(String::from("OK")),
             Command::ECHO(echo_words) => make_array_str(vec![
                 make_bulk_str(String::from("echo")),
                 make_bulk_str(echo_words.to_string()),
@@ -123,24 +123,36 @@ impl Responder {
         }
     }
 
-    pub fn ping_request(&self) -> Vec<u8> {
-        make_array_str(vec![make_bulk_str(String::from("ping"))])
+    pub fn send_ping_request(&self, mut stream: &TcpStream) {
+        stream.write_all(&make_array_str(vec![make_bulk_str(String::from("ping"))])).unwrap();
     }
 
-    pub fn pong_response(&self) -> Vec<u8> {
-        make_simple_str(String::from("PONG"))
+    pub fn send_pong_response(&self, mut stream: &TcpStream) {
+        stream.write_all(&make_simple_str(String::from("PONG"))).unwrap();
     }
 
-    pub fn empty_response(&self) -> Vec<u8> {
-        String::from("").as_bytes().to_vec()
+    pub fn send_empty_response(&self, mut stream: &TcpStream) {
+        stream.write_all(&String::from("").as_bytes().to_vec()).unwrap();
     }
 
-    pub fn ok_reponse(&self) -> Vec<u8> {
-        make_simple_str(String::from("OK"))
+    pub fn send_ok_reponse(&self, mut stream: &TcpStream) {
+        stream.write_all(&make_simple_str(String::from("OK"))).unwrap();
     }
 
-    pub fn empty_get_reponse(&self) -> Vec<u8> {
-        String::from("$-1\r\n").as_bytes().to_vec()
+    pub fn send_empty_get_reponse(&self, mut stream: &TcpStream) {
+        stream.write_all(&String::from("$-1\r\n").as_bytes().to_vec()).unwrap();
+    }
+
+    pub fn send_string_response(&self, mut stream: &TcpStream, message: String) {
+        stream.write_all(&make_bulk_str(message)).unwrap();
+    }
+
+    pub fn send_vec_response(&self, mut stream: &TcpStream, info_string: Vec<u8>) {
+        stream.write_all(&info_string).unwrap();
+    }
+
+    pub fn send_rdb(&self, mut stream: &TcpStream) {
+        
     }
 
     pub fn replconf_request_one(&self, replicated_port: &u32) -> Vec<u8> {

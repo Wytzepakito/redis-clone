@@ -2,7 +2,6 @@ pub mod config;
 pub mod connection;
 pub mod formatter;
 pub mod marshall;
-pub mod lines_marshall;
 pub mod responder;
 pub mod store;
 use std::{
@@ -14,6 +13,7 @@ use std::{
 };
 
 use config::Config;
+use formatter::make_simple_str;
 use responder::Command;
 
 use crate::{
@@ -55,18 +55,22 @@ impl RedisServer {
             .unwrap();
 
         let store = RedisDataStore::new(hashmap.clone());
+        println!("Store instantiated");
         let mut master_redis = Connection::new(store, config.clone());
+        println!("master_redis instantiated");
         self.slave_discard_rdb_file(&mut master_stream);
+        println!("slave discard rdb ran");
         thread::spawn(move || {
             master_redis.handle_master_stream(master_stream);
         });
+        println!("Master stream thread spawned");
 
         while let Ok((stream, _)) = listener.accept() {
             let store = RedisDataStore::new(hashmap.clone());
             let mut redis = Connection::new(store, config.clone());
             thread::spawn(move || {
                 //handle_expirations(&mut redis);
-                redis.handle_stream(stream);
+                redis.handle_stream(&stream);
             });
         }
     }
@@ -77,7 +81,7 @@ impl RedisServer {
         replicated_port: &u32,
     ) -> Result<(), String> {
         let responder = Responder::new();
-        self.send_and_ack(master_stream, responder.ping_request(), Command::PONG)?;
+        self.send_and_ack(master_stream, make_simple_str(String::from("PING")), Command::PONG)?;
 
         self.send_and_ack(
             master_stream,
@@ -104,7 +108,7 @@ impl RedisServer {
         let marshall = Marshaller::new();
         master_stream.write_all(&request).unwrap();
         let words = marshall.parse_redis_command(&master_stream);
-        println!("{:?}", words);
+        println!("In send and ack words: {:?}", words);
         let command = marshall.make_command(words?)?;
 
         if &command == &Command::FULLRESYNC {
@@ -151,7 +155,7 @@ impl RedisServer {
             let mut redis = Connection::new(store, config.clone());
             thread::spawn(move || {
                 //handle_expirations(&mut redis);
-                redis.handle_stream(stream);
+                redis.handle_stream(&stream);
             });
         }
     }

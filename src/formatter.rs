@@ -37,11 +37,23 @@ pub fn make_fullresync_str(config: &Config) -> Vec<u8> {
 
 fn make_resync_str(config: &Master) -> Vec<u8> {
     let mut string = make_simple_str(format!("FULLRESYNC {} 0", &config.replication_id));
+    
 
     let bytes = BASE64_STANDARD.decode(EMPTY_RDB_BASE64).unwrap();
     
-    string.extend(format!("${}\r\n", bytes.len()).as_bytes());
-    string.extend(bytes);
+    string.extend(format!("${}\r\n", &bytes.len()).as_bytes());
+    string.extend(bytes);    // Attempt to convert Vec<u8> to String
+    let mut string2 = make_simple_str(format!("FULLRESYNC {} 0", &config.replication_id));
+    
+
+    let bytes2 = BASE64_STANDARD.decode(EMPTY_RDB_BASE64).unwrap();
+    
+    string2.extend(format!("${}\r\n", bytes2.len()).as_bytes());
+    string2.extend(bytes2);    // Attempt to convert Vec<u8> to String
+    match String::from_utf8(string2) {
+        Ok(s) => println!("Converted string: {}", s),
+        Err(e) => println!("Error: {}", e),
+    }
     string
 }
 
